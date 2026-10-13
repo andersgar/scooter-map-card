@@ -19,6 +19,7 @@ import leafletCss from "leaflet/dist/leaflet.css";
 import { pickLanguage } from "./i18n.js";
 import { getProvider } from "./providers/index.js";
 import { subscribe } from "./poller.js";
+import { ScooterMapCardEditor } from "./editor.js";
 
 // eslint-disable-next-line no-undef
 const VERSION = typeof __VERSION__ === "string" ? __VERSION__ : "dev";
@@ -197,6 +198,10 @@ const STYLE = `
 class ScooterMapCard extends HTMLElement {
   static getStubConfig() {
     return { source: { provider: "entur", range_m: 800 }, zoom: 15, max_markers: 40 };
+  }
+
+  static getConfigElement() {
+    return document.createElement("scooter-map-card-editor");
   }
 
   setConfig(config) {
@@ -624,6 +629,7 @@ class ScooterMapCard extends HTMLElement {
 }
 
 if (!customElements.get("scooter-map-card")) customElements.define("scooter-map-card", ScooterMapCard);
+if (!customElements.get("scooter-map-card-editor")) customElements.define("scooter-map-card-editor", ScooterMapCardEditor);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "scooter-map-card",
