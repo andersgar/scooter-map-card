@@ -158,6 +158,7 @@ export class ScooterMapCardEditor extends HTMLElement {
       const out = clean({ ...this._config.source, ...v });
       if (!out.operators || !out.operators.length) delete out.operators;
       if (!out.form_factors || !out.form_factors.length) delete out.form_factors;
+      for (const k of prov === "gbfs" ? ["operators", "form_factors"] : ["operator", "max_range_m", "language"]) delete out[k];
       if (!v.include_reserved) delete out.include_reserved;
       if (!v.include_disabled) delete out.include_disabled;
       this._config.source = out;
