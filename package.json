@@ -1,0 +1,20 @@
+{
+  "name": "scooter-map-card",
+  "version": "1.0.0",
+  "description": "Home Assistant card: shared e-scooters and bikes near home on a dark map, with battery labels (Entur or any GBFS feed)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "dev": "python -m http.server 8765"
+  },
+  "repository": "github:andersgar/scooter-map-card",
+  "license": "MIT",
+  "dependencies": {
+    "leaflet": "1.9.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}
