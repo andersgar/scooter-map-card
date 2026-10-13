@@ -624,8 +624,6 @@ class ScooterMapCard extends HTMLElement {
 }
 
 if (!customElements.get("scooter-map-card")) customElements.define("scooter-map-card", ScooterMapCard);
-// Backwards-compatible alias for dashboards built with the original Ryde-only card.
-if (!customElements.get("ryde-map-card")) customElements.define("ryde-map-card", class extends ScooterMapCard {});
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "scooter-map-card",
