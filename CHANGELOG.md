@@ -12,6 +12,8 @@ name still works).
   packages included.
 - Operator and form-factor filters, bike and car marker icons, battery from
   fuel percent or range estimate, operator name and app link in the pop-up.
+- `marker_color: operator` with built-in and custom operator colours and a
+  legend chip; battery mode remains the default.
 - Leaflet bundled into the single HACS file; tiles `auto` (Kartverket in
   Norway, OpenStreetMap dark elsewhere); en / nb / sv / de strings.
 - Runtime provider registry (`window.scooterMapProviders`).

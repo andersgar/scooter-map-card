@@ -14,6 +14,9 @@ app on that exact vehicle.
 - **Live.** Positions refresh every 30 s; markers move instead of flickering.
 - **Battery at a glance.** Green ≥ 60 %, amber ≥ 30 %, red below. Operators
   that only publish range get an estimate from range ÷ max range.
+- **Or colour by operator.** `marker_color: operator` gives every operator its
+  own colour (Ryde green, Voi orange, Dott teal, …, all overridable) with a
+  legend chip, while the battery badge keeps the battery colour.
 - **No YAML needed.** Give the card a radius and it fetches vehicles itself:
   every operator in Norway through [Entur](https://developer.entur.org)
   (Ryde, Voi, Dott, Bolt, the city bikes, car sharing), every operator in
@@ -24,6 +27,8 @@ app on that exact vehicle.
   run through a dark filter; any tile server via `tile_url`.
 - Works as a small static tile, a full-width map, or inside a bubble-card
   pop-up. English / Norwegian / Swedish / German strings.
+
+![Every operator around Buran, Trondheim, coloured by operator](docs/img/operators.png)
 
 ![All operators in Stuttgart via MobiData BW](docs/img/lamassu.png)
 
@@ -106,7 +111,10 @@ sensor route. See [docs/providers.md](docs/providers.md).
 | `tile_url`, `tile_attribution`, `tile_filter` | – | Your own tile server (`{z}/{x}/{y}` template) with optional CSS filter. |
 | `brightness` | `1` | Extra brightness multiplier on the tiles (0.8–1.4). |
 | `link` | `android` | Which rental link the pop-up offers: `android`, `ios`, `web`, `none`. |
-| `operator_names` | `{}` | Operator id → short label for the pop-up. |
+| `marker_color` | `battery` | `battery` = green/amber/red by charge. `operator` = one colour per operator; the battery badge under the marker then carries the battery colour, so both are visible. |
+| `operator_colors` | `{}` | Operator → colour, keyed by operator id, name or a keyword found in either, e.g. `{ ryde: "#22c55e", voi: "#f97316", "YDT:Operator:dott": "#14b8a6" }`. Built-in defaults exist for Ryde, Voi, Dott/Tier, Bolt, Lime, Bird, nextbike, the Norwegian city bikes and more; unknown operators get a stable palette colour. |
+| `show_legend` | on in operator mode | Legend chip with one dot per operator currently on the map. |
+| `operator_names` | `{}` | Operator id → short label for the pop-up and legend. |
 | `home_lat`, `home_lon`, `home_label` | HA home | Override the centre; label used in "N m from home". |
 | `height` | – | Minimum height (px number or CSS length) for masonry views and pop-ups. |
 | `language` | HA user language | `en`, `nb`, `sv`, `de`. |
@@ -168,6 +176,18 @@ type: custom:scooter-map-card
 entity: sensor.ryde_list
 zoom: 17
 grid_options: { columns: full, rows: 13 }
+```
+
+**Every operator, coloured by operator, with your own colours:**
+
+```yaml
+type: custom:scooter-map-card
+source: { provider: entur, range_m: 800 }
+marker_color: operator
+operator_colors:
+  ryde: "#22c55e"
+  voi: "#f97316"
+  dott: "#14b8a6"
 ```
 
 **Oslo city bikes and scooters, bikes included:**
