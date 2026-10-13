@@ -67,6 +67,20 @@ const OPERATOR_NAMES = {
   "YOS:Operator:oslobysykkel": "Oslo Bysykkel", "YBE:Operator:bergenbysykkel": "Bergen Bysykkel",
   "YTR:Operator:trondheimbysykkel": "Trondheim Bysykkel", "YKO:Operator:kolumbusbysykkel": "Kolumbus Bysykkel",
 };
+// Brand-ish colours for `marker_color: operator`, matched on a keyword in the
+// operator id or name (so "YVO:Operator:voi", "VOI:Operator:voi" and "Voi" all
+// hit). Override or extend with `operator_colors`.
+const OPERATOR_COLORS = [
+  ["ryde", "#22c55e"], ["voi", "#f97316"], ["dott", "#14b8a6"], ["tier", "#14b8a6"], ["bolt", "#34d186"],
+  ["lime", "#a3e635"], ["bird", "#38bdf8"], ["nextbike", "#0ea5e9"], ["bysykkel", "#60a5fa"], ["donkey", "#f59e0b"],
+  ["zeus", "#e879f9"], ["hertz", "#facc15"], ["getaround", "#a78bfa"], ["hyre", "#fb7185"], ["otto", "#c084fc"],
+];
+const OP_PALETTE = ["#f97316", "#22c55e", "#38bdf8", "#e879f9", "#facc15", "#a78bfa", "#fb7185", "#14b8a6"];
+const hashColor = (s) => {
+  let h = 7;
+  for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return OP_PALETTE[h % OP_PALETTE.length];
+};
 
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371000, k = Math.PI / 180;
@@ -112,6 +126,9 @@ const STYLE = `
   .chip span { white-space: nowrap; }
   .chip .sep { opacity: .5; }
   .chip b { color: #fff; font-weight: 600; }
+  .chip.legend { gap: 10px; }
+  .chip.legend[hidden] { display: none; }
+  .chip .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(255,255,255,.5); }
 
   .btn {
     position: absolute; z-index: 800; width: 34px; height: 34px; border-radius: 10px;
@@ -197,14 +214,20 @@ class ScooterMapCard extends HTMLElement {
       show_attribution: true,
       interactive: true,
       stats_radii: [100, 300],
+      marker_color: "battery", // battery | operator (circle by operator, battery badge keeps the battery colour)
+      operator_colors: {},    // operator id, name or keyword -> colour, e.g. { ryde: "#22c55e", "YVO:Operator:voi": "#f97316" }
+      show_legend: null,      // operator legend chip; default on in operator mode
       operator_names: {},     // operator id -> short label
       language: null,         // en | nb | sv | de (default: Home Assistant user language)
       tap_action: null,       // e.g. { action: navigate, navigation_path: "#scooter_map" }
       ...config,
     };
     this._t = pickLanguage(this._config.language, this._hass);
+    if (this._config.show_legend == null) this._config.show_legend = this._config.marker_color === "operator";
     if (this._map) {
       this._applyTiles();
+      for (const m of this._markers.values()) m.remove();   // colours/icons may have changed
+      this._markers.clear();
       this._lastKey = null;
       if (this._config.source && this.isConnected) this._startSource();
       this._update();
@@ -303,6 +326,21 @@ class ScooterMapCard extends HTMLElement {
     return (this._config.operator_names || {})[id] || OPERATOR_NAMES[id] || v.operator || (id ? id.split(":").pop() : null) || this._config.title || this._t.title;
   }
 
+  _operatorColor(v) {
+    const id = String(v.operator_id || ""), name = String(v.operator || "");
+    const hay = `${id} ${name}`.toLowerCase();
+    const custom = this._config.operator_colors || {};
+    for (const [k, c] of Object.entries(custom)) {
+      if (k === id || k === name || (k.length > 1 && hay.includes(k.toLowerCase()))) return c;
+    }
+    for (const [k, c] of OPERATOR_COLORS) if (hay.includes(k)) return c;
+    return hashColor(id || name || "?");
+  }
+
+  _markerColor(v, bat) {
+    return this._config.marker_color === "operator" ? this._operatorColor(v) : batteryColor(bat);
+  }
+
   _handleTap(a) {
     switch (a.action) {
       case "navigate": {
@@ -341,6 +379,7 @@ class ScooterMapCard extends HTMLElement {
           <div class="hud">
             ${c.show_title ? `<span class="chip title">${svg(ICON_SCOOTER)}<span id="title">${esc(c.title != null ? c.title : this._t.title)}</span></span>` : ""}
             ${c.show_stats ? `<span class="chip" id="stats"></span>` : ""}
+            ${c.show_legend ? `<span class="chip legend" id="legend" hidden></span>` : ""}
           </div>
           ${c.show_controls ? `<button class="btn center" id="center" title="${esc(this._t.center)}">${svg(ICON_CENTER)}</button>` : ""}
           <div class="msg" id="msg" hidden></div>
@@ -349,6 +388,7 @@ class ScooterMapCard extends HTMLElement {
     this._els = {
       map: root.getElementById("map"),
       stats: root.getElementById("stats"),
+      legend: root.getElementById("legend"),
       title: root.getElementById("title"),
       msg: root.getElementById("msg"),
       wrap: root.querySelector(".wrap"),
@@ -505,6 +545,14 @@ class ScooterMapCard extends HTMLElement {
       this._els.stats.classList.toggle("warn", !!stale);
     }
 
+    if (this._els.legend && !this._config.show_legend) this._els.legend.hidden = true;
+    else if (this._els.legend) {
+      const ops = new Map();
+      for (const v of shown) { const n = this._operatorName(v); if (!ops.has(n)) ops.set(n, this._operatorColor(v)); }
+      this._els.legend.innerHTML = [...ops].map(([n, col]) => `<span><i class="dot" style="background:${col}"></i>${esc(n)}</span>`).join("");
+      this._els.legend.hidden = ops.size === 0;
+    }
+
     const seen = new Set();
     shown.forEach((v, i) => {
       const id = v.id || `idx-${i}`;
@@ -536,11 +584,13 @@ class ScooterMapCard extends HTMLElement {
   }
 
   _icon(v, bat) {
-    const c = batteryColor(bat);
+    const c = this._markerColor(v, bat);
     const label = bat != null ? `${bat}%` : v.km != null ? `${v.km} km` : "?";
+    // In operator mode the badge carries the battery colour so both signals stay visible.
+    const badgeStyle = this._config.marker_color === "operator" && bat != null ? ` style="background:${batteryColor(bat)}"` : "";
     return L.divIcon({
       className: "rm-di",
-      html: `<div class="rm-m" style="--c:${c}"><div class="rm-i">${svg(iconFor(v.form_factor))}</div><div class="rm-b">${esc(label)}</div></div>`,
+      html: `<div class="rm-m" style="--c:${c}"><div class="rm-i">${svg(iconFor(v.form_factor))}</div><div class="rm-b"${badgeStyle}>${esc(label)}</div></div>`,
       iconSize: [44, 44],
       iconAnchor: [22, 18],
       popupAnchor: [0, -14],
@@ -550,7 +600,7 @@ class ScooterMapCard extends HTMLElement {
   _popup(v) {
     const t = this._t;
     const bat = v.bat == null ? null : Math.round(Number(v.bat));
-    const c = batteryColor(bat);
+    const c = this._markerColor(v, bat);
     const link = this._config.link;
     const url = link === "ios" ? v.url_ios : link === "web" ? v.url_web : link === "android" ? v.url_android : null;
     const op = this._operatorName(v);
