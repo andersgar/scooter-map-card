@@ -1,0 +1,91 @@
+# Scooter Map Card — entity mode for any GBFS feed (worldwide)
+#
+# Use this when the operator's feed does not allow browser requests (CORS),
+# e.g. Lime, Voi or Donkey Republic: Home Assistant fetches the feed server-side.
+#
+# 1. Find the feed in https://github.com/MobilityData/gbfs/blob/master/systems.csv
+#    (column "Auto-Discovery URL"), open it, and copy the URL of
+#    `vehicle_status` (GBFS 3.x) or `free_bike_status` (GBFS 2.x) and, if
+#    present, `vehicle_types`.
+# 2. Paste them below, set your coordinates, check the config and restart.
+#
+# Creates sensor.gbfs_raw, sensor.gbfs_types (optional) and sensor.scooter_list
+# (attribute `list`, vehicles within RANGE metres sorted by distance).
+#
+# Card:  type: custom:scooter-map-card
+#        entity: sensor.scooter_list
+
+rest:
+  - resource: https://api.mobidata-bw.de/sharing/gbfs/v3/bolt_stuttgart/vehicle_status
+    scan_interval: 30
+    timeout: 20
+    sensor:
+      - name: "GBFS raw"
+        unique_id: scooter_map_gbfs_raw
+        icon: mdi:scooter-electric
+        unit_of_measurement: "vehicles"
+        value_template: "{{ (value_json.data.vehicles or value_json.data.bikes) | count }}"
+        json_attributes_path: "$.data"
+        json_attributes:
+          - vehicles   # GBFS 3.x
+          - bikes      # GBFS 2.x
+
+  # Optional: vehicle types give the max range used for the battery estimate
+  # when the feed publishes range but not fuel percent.
+  - resource: https://api.mobidata-bw.de/sharing/gbfs/v3/bolt_stuttgart/vehicle_types
+    scan_interval: 3600
+    timeout: 20
+    sensor:
+      - name: "GBFS types"
+        unique_id: scooter_map_gbfs_types
+        value_template: "{{ value_json.data.vehicle_types | count }}"
+        json_attributes_path: "$.data"
+        json_attributes:
+          - vehicle_types
+
+template:
+  - sensor:
+      - name: "Scooter list"
+        unique_id: scooter_map_list
+        icon: mdi:scooter-electric
+        unit_of_measurement: "vehicles"
+        state: "{{ (this.attributes.list | count) if this is defined and this.attributes.list is defined else 0 }}"
+        attributes:
+          list: >-
+            {% set RANGE = 800 %}
+            {% set HOME_LAT = state_attr('zone.home', 'latitude') %}
+            {% set HOME_LON = state_attr('zone.home', 'longitude') %}
+            {% set types = {} %}
+            {% for t in state_attr('sensor.gbfs_types', 'vehicle_types') or [] %}
+              {% set types = dict(types, **{t.vehicle_type_id: t}) %}
+            {% endfor %}
+            {% set ns = namespace(l=[]) %}
+            {% for v in (state_attr('sensor.gbfs_raw', 'vehicles') or state_attr('sensor.gbfs_raw', 'bikes') or []) %}
+              {% if v.lat is not none and not v.is_disabled and not v.is_reserved %}
+                {% set d = (distance(HOME_LAT, HOME_LON, v.lat, v.lon) * 1000) | round(0) | int %}
+                {% if d <= RANGE %}
+                  {% set t = types.get(v.vehicle_type_id, {}) %}
+                  {% set max = t.get('max_range_meters') or 0 %}
+                  {% set fuel = v.get('current_fuel_percent') %}
+                  {% set rng = v.get('current_range_meters') %}
+                  {% set bat = ((100 * fuel) if fuel <= 1 else fuel) | round(0) | int if fuel is not none
+                               else ((100 * rng / max) | round(0) | int if max and rng is not none else none) %}
+                  {% set ns.l = ns.l + [{
+                    'id': v.get('vehicle_id') or v.get('bike_id'), 'lat': v.lat, 'lon': v.lon,
+                    'd': d, 'bat': bat,
+                    'km': ((rng or 0) / 1000) | round(1),
+                    'form_factor': (t.get('form_factor') or '') | upper,
+                    'url_android': (v.get('rental_uris') or {}).get('android'),
+                    'url_ios': (v.get('rental_uris') or {}).get('ios'),
+                    'url_web': (v.get('rental_uris') or {}).get('web') }] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.l | sort(attribute='d') }}
+
+recorder:
+  exclude:
+    entities:
+      - sensor.gbfs_raw
+      - sensor.gbfs_types
+      - sensor.scooter_list
