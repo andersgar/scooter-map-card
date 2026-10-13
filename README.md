@@ -27,6 +27,8 @@ app on that exact vehicle.
   run through a dark filter; any tile server via `tile_url`.
 - Works as a small static tile, a full-width map, or inside a bubble-card
   pop-up. English / Norwegian / Swedish / German strings.
+- **Visual editor.** Every option below can be set in the dashboard card
+  editor without writing YAML.
 
 ![Every operator around Buran, Trondheim, coloured by operator](docs/img/operators.png)
 
@@ -90,6 +92,10 @@ your own [Lamassu](https://github.com/entur/lamassu)) or the Home Assistant
 sensor route. See [docs/providers.md](docs/providers.md).
 
 ## Configuration
+
+Open the card in the dashboard editor for a form with all of these options
+(the operator colour and name maps are edited as YAML inside the form). The
+YAML reference:
 
 ### Card options
 
@@ -233,9 +239,6 @@ npm run dev          # static server on :8765, open /dev/ for the test harness
 `dev/index.html` renders the card from a fixture (entity mode) and live from
 Entur, MobiData BW and a GBFS feed (source mode). `dist/` is committed so HACS
 can install straight from the default branch; releases attach the same file.
-
-The element is also registered as `custom:ryde-map-card` for dashboards built
-with the original Ryde-only version of this card.
 
 ## Credits and data licences
 

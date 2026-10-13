@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — 2026-10-13
+
+- Visual editor in the dashboard card editor: data source, appearance and
+  advanced options, in English and Norwegian.
+- Removed the `ryde-map-card` alias; use `custom:scooter-map-card`.
+
 ## 1.0.0 — 2026-10-13
 
 First public release (successor of the Ryde-only `ryde-map-card`; that element
