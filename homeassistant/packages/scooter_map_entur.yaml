@@ -1,0 +1,89 @@
+# Scooter Map Card — entity mode for Entur (Norway)
+#
+# Drop this file into config/packages/ (enable packages with
+#   homeassistant:
+#     packages: !include_dir_named packages
+# in configuration.yaml), set your coordinates and operators in the payload,
+# check the config and restart.
+#
+# It creates:
+#   sensor.scooter_raw           one POST to Entur every 30 s, raw vehicle list
+#   sensor.scooter_list          attribute `list` = vehicles sorted by distance
+#                                (what the card reads)
+#   sensor.scooter_nearest       distance to the nearest vehicle (m)
+#   sensor.scooters_within_300_m count — handy for automations
+#                                ("notify me when a scooter with ≥ 70 % is within 150 m")
+#
+# Card:  type: custom:scooter-map-card
+#        entity: sensor.scooter_list
+
+rest:
+  - resource: https://api.entur.io/mobility/v2/graphql
+    method: POST
+    scan_interval: 30
+    timeout: 15
+    headers:
+      Content-Type: application/json
+      ET-Client-Name: homeassistant-scooter-map-card
+    # lat/lon = your home; drop `operators:` for every operator,
+    # `formFactors:` for bikes and cars as well.
+    payload: >-
+      {"query":"{ vehicles(lat: 63.4364, lon: 10.4250, range: 800, count: 300,
+      operators: [\"YRY:Operator:Ryde\"], formFactors: [SCOOTER_STANDING],
+      includeReserved: false, includeDisabled: false)
+      { id lat lon currentRangeMeters currentFuelPercent
+        vehicleType { formFactor maxRangeMeters } rentalUris { android ios web }
+        system { operator { id } } } }"}
+    sensor:
+      - name: "Scooter raw"
+        unique_id: scooter_map_raw
+        icon: mdi:scooter-electric
+        unit_of_measurement: "vehicles"
+        value_template: "{{ value_json.data.vehicles | count }}"
+        json_attributes_path: "$.data"
+        json_attributes:
+          - vehicles
+
+template:
+  - sensor:
+      - name: "Scooter list"
+        unique_id: scooter_map_list
+        icon: mdi:scooter-electric
+        unit_of_measurement: "vehicles"
+        state: "{{ (this.attributes.list | count) if this is defined and this.attributes.list is defined else 0 }}"
+        attributes:
+          list: >-
+            {% set ns = namespace(l=[]) %}
+            {% for v in state_attr('sensor.scooter_raw', 'vehicles') or [] %}
+              {% set max = v.vehicleType.maxRangeMeters or 0 %}
+              {% set bat = (100 * v.currentFuelPercent) | round(0) | int if v.currentFuelPercent is not none
+                           else ((100 * v.currentRangeMeters / max) | round(0) | int if max and v.currentRangeMeters is not none else none) %}
+              {% set ns.l = ns.l + [{
+                'id': v.id, 'lat': v.lat, 'lon': v.lon,
+                'd': (distance(v.lat, v.lon) * 1000) | round(0) | int,
+                'bat': bat,
+                'km': ((v.currentRangeMeters or 0) / 1000) | round(1),
+                'operator_id': v.system.operator.id,
+                'form_factor': v.vehicleType.formFactor,
+                'url_android': v.rentalUris.android, 'url_ios': v.rentalUris.ios, 'url_web': v.rentalUris.web }] %}
+            {% endfor %}
+            {{ ns.l | sort(attribute='d') }}
+
+      - name: "Scooter nearest"
+        unique_id: scooter_map_nearest
+        icon: mdi:map-marker-distance
+        unit_of_measurement: "m"
+        availability: "{{ (state_attr('sensor.scooter_list', 'list') or []) | count > 0 }}"
+        state: "{{ (state_attr('sensor.scooter_list', 'list') or [{'d': none}])[0].d }}"
+
+      - name: "Scooters within 300 m"
+        unique_id: scooter_map_within_300m
+        icon: mdi:scooter-electric
+        unit_of_measurement: "vehicles"
+        state: "{{ (state_attr('sensor.scooter_list', 'list') or []) | selectattr('d', 'le', 300) | list | count }}"
+
+recorder:
+  exclude:
+    entities:
+      - sensor.scooter_raw
+      - sensor.scooter_list
