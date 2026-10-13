@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>scooter-map-card dev</title>
+<style>
+  body { margin: 0; background: #111; color: #ddd; font-family: Roboto, system-ui, sans-serif; padding: 24px; }
+  ha-card { display: block; border-radius: 12px; background: #1c1c1c; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 1200px; }
+  .wide { grid-column: 1 / -1; }
+  h3 { font-weight: 500; margin: 0 0 8px; font-size: 14px; color: #999; }
+  code { color: #4ade80; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="wide"><h3>entity mode · fixture (<code>dev/fixture-entur.json</code>, Ryde only, nb)</h3><scooter-map-card id="a" style="display:block;height:340px"></scooter-map-card></div>
+  <div><h3>source mode · live Entur · all operators, all form factors, Trondheim (en)</h3><scooter-map-card id="b" style="display:block;height:320px"></scooter-map-card></div>
+  <div><h3>source mode · live Entur · Voi + Ryde scooters only · static tile, no stats</h3><scooter-map-card id="c" style="display:block;height:320px"></scooter-map-card></div>
+  <div><h3>source mode · generic GBFS v3 · Bolt Stuttgart via MobiData BW · auto tiles → OSM dark</h3><scooter-map-card id="d" style="display:block;height:320px"></scooter-map-card></div>
+  <div><h3>source mode · entur provider pointed at MobiData BW's Lamassu (same schema), Stuttgart, all operators (de)</h3><scooter-map-card id="e" style="display:block;height:320px"></scooter-map-card></div>
+</div>
+<script type="module">
+  import "../dist/scooter-map-card.js";
+  const HOME = [63.4364, 10.4250]; // Buran, Trondheim
+  const dist = (a, b) => {
+    const R = 6371000, r = Math.PI / 180;
+    const dp = (HOME[0] - a) * r, dl = (HOME[1] - b) * r;
+    const h = Math.sin(dp / 2) ** 2 + Math.cos(a * r) * Math.cos(HOME[0] * r) * Math.sin(dl / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  const raw = await (await fetch("./fixture-entur.json")).json();
+  const list = raw.data.vehicles.map((v) => ({
+    id: v.id, lat: v.lat, lon: v.lon,
+    d: Math.round(dist(v.lat, v.lon)),
+    bat: Math.min(100, Math.round(100 * v.currentRangeMeters / (v.vehicleType?.maxRangeMeters || 56300))),
+    km: Math.round(v.currentRangeMeters / 100) / 10,
+    url_android: "https://ryde.vip", url_ios: "https://ryde.vip",
+  })).sort((a, b) => a.d - b.d);
+  const hass = {
+    language: "nb",
+    config: { latitude: HOME[0], longitude: HOME[1] },
+    states: { "sensor.ryde_list": { state: String(list.length), last_updated: new Date().toISOString(), attributes: { list } } },
+  };
+  const cfgs = {
+    a: { entity: "sensor.ryde_list", title: "Ryde", zoom: 15, max_markers: 60 },
+    b: { source: { provider: "entur", range_m: 800 }, zoom: 16, language: "en" },
+    c: { source: { provider: "entur", range_m: 600, operators: ["YRY:Operator:Ryde", "YVO:Operator:voi"], form_factors: ["SCOOTER_STANDING"] }, title: "Ryde + Voi", zoom: 16, interactive: false, show_stats: false, show_controls: false },
+    d: { source: { provider: "gbfs", url: "https://api.mobidata-bw.de/sharing/gbfs/v3/bolt_stuttgart/gbfs", lat: 48.7758, lon: 9.1829, range_m: 800, operator: "Bolt" }, title: "GBFS · Bolt Stuttgart", zoom: 15 },
+    e: { source: { provider: "entur", url: "https://api.mobidata-bw.de/sharing/graphql", lat: 48.7758, lon: 9.1829, range_m: 600 }, title: "MobiData BW (Lamassu)", zoom: 16, stats_radii: [150, 500], language: "de" },
+  };
+  for (const [id, cfg] of Object.entries(cfgs)) {
+    const el = document.getElementById(id);
+    el.setConfig(cfg);
+    el.hass = hass;
+  }
+  // simulate an entity update after 5 s: shuffle a few positions & batteries
+  setTimeout(() => {
+    const l2 = list.map((v, i) => (i % 5 === 0 ? { ...v, lat: v.lat + 0.0004, bat: Math.max(0, v.bat - 40) } : v));
+    document.getElementById("a").hass = { ...hass, states: { "sensor.ryde_list": { ...hass.states["sensor.ryde_list"], last_updated: new Date().toISOString(), attributes: { list: l2 } } } };
+    console.log("simulated update applied");
+  }, 5000);
+  window.cards = Object.fromEntries(Object.keys(cfgs).map((k) => [k, document.getElementById(k)]));
+</script>
+</body>
+</html>
