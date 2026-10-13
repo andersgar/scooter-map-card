@@ -1,0 +1,6 @@
+{
+  "name": "Scooter Map Card",
+  "filename": "scooter-map-card.js",
+  "render_readme": true,
+  "homeassistant": "2024.8.0"
+}
